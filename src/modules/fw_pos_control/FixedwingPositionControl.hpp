@@ -263,6 +263,7 @@ private:
 	double _current_longitude{0};
 	float _current_altitude{0.f};
 
+	float _roll{0.f};
 	float _pitch{0.0f};
 	float _yaw{0.0f};
 	float _yawrate{0.0f};
@@ -406,6 +407,7 @@ private:
 	matrix::Vector2d _transition_waypoint{(double)NAN, (double)NAN};
 	param_t _param_handle_airspeed_trans{PARAM_INVALID};
 	float _param_airspeed_trans{NAN}; // [m/s]
+	float _last_roll_setpoint{0.f}; // Roll setpoint set in the last iteration
 
 	// ESTIMATOR RESET COUNTERS
 
@@ -471,6 +473,13 @@ private:
 	void tecs_status_publish(float alt_sp, float equivalent_airspeed_sp, float true_airspeed_derivative_raw,
 				 float throttle_trim);
 	void publishLocalPositionSetpoint(const position_setpoint_s &current_waypoint);
+
+	/**
+	 * @brief Get the NPFG roll setpoint with mitigation strategy if npfg is not certain about its output
+	 *
+	 * @return roll setpoint
+	 */
+	float getCorrectedNpfgRollSetpoint();
 
 	/**
 	 * @brief Sets the landing abort status and publishes landing status.
