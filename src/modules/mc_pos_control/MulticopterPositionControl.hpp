@@ -132,12 +132,7 @@ private:
 		.landed = true,
 	};
 
-	enum SetpointInterface {
-		kTrajectory = 0,
-		kGoto
-	} _last_active_setpoint_interface{kTrajectory};
-
-	GotoControl _goto_control;
+	GotoControl _goto_control{this};
 
 	DEFINE_PARAMETERS(
 		// Position Control
@@ -188,11 +183,7 @@ private:
 		(ParamFloat<px4::params::MPC_MAN_Y_TAU>)    _param_mpc_man_y_tau,
 
 		(ParamFloat<px4::params::MPC_XY_VEL_ALL>)   _param_mpc_xy_vel_all,
-		(ParamFloat<px4::params::MPC_Z_VEL_ALL>)    _param_mpc_z_vel_all,
-
-		(ParamFloat<px4::params::MPC_YAWRAUTO_MAX>) _param_mpc_yawrauto_max,
-		(ParamFloat<px4::params::MPC_YAWAAUTO_MAX>) _param_mpc_yawaauto_max,
-		(ParamFloat<px4::params::MPC_XY_ERR_MAX>) _param_mpc_xy_err_max
+		(ParamFloat<px4::params::MPC_Z_VEL_ALL>)    _param_mpc_z_vel_all
 	);
 
 	control::BlockDerivative _vel_x_deriv; /**< velocity derivative in x */
@@ -241,13 +232,4 @@ private:
 	 * This should only happen briefly when transitioning and never during mode operation or by design.
 	 */
 	trajectory_setpoint_s generateFailsafeSetpoint(const hrt_abstime &now, const PositionControlStates &states, bool warn);
-
-	/**
-	 * @brief adjust existing (or older) setpoint with any EKF reset deltas and update the local counters
-	 *
-	 * @param[in] vehicle_local_position struct containing EKF reset deltas and counters
-	 * @param[out] setpoint trajectory setpoint struct to be adjusted
-	 */
-	void adjustSetpointForEKFResets(const vehicle_local_position_s &vehicle_local_position,
-					trajectory_setpoint_s &setpoint);
 };
