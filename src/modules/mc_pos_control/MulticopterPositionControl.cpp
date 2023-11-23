@@ -370,38 +370,53 @@ void MulticopterPositionControl::Run()
 
 		PositionControlStates states{set_vehicle_states(vehicle_local_position)};
 
-		_trajectory_setpoint_sub.update(&_setpoint);
-
-		const hrt_abstime last_goto_timestamp = _goto_setpoint.timestamp;
-		_goto_setpoint_sub.update(&_goto_setpoint);
-
-		if ((_goto_setpoint.timestamp != 0)
-		    && (_goto_setpoint.timestamp >= _time_position_control_enabled)
-		    && (hrt_elapsed_time(&last_goto_timestamp) < 200_ms)
-		    && _vehicle_control_mode.flag_multicopter_position_control_enabled) {
-			// take goto setpoint as priority over trajectory setpoint
-
-			if (!_goto_control.is_initialized) {
-				_goto_control.resetPositionSmoother(states.position);
-				_goto_control.resetHeadingSmoother(states.yaw);
-			}
-
-			_goto_control.update(dt, states.position, states.yaw, _goto_setpoint, _setpoint);
-
-			// for logging
-			_trajectory_setpoint_pub.publish(_setpoint);
-
-			_vehicle_constraints.timestamp = hrt_absolute_time();
-			_vehicle_constraints.want_takeoff = false;
-			_vehicle_constraints.speed_up = _param_mpc_z_vel_max_up.get();
-			_vehicle_constraints.speed_down = _param_mpc_z_vel_max_dn.get();
-
-		} else {
-			_goto_control.is_initialized = false;
-			_vehicle_constraints_sub.update(&_vehicle_constraints);
+		// if a goto setpoint available this publishes a trajectory setpoint to go there
+		if (_goto_control.checkForSetpoint(vehicle_local_position.timestamp_sample,
+						   _vehicle_control_mode.flag_multicopter_position_control_enabled)) {
+			_goto_control.update(dt, states.position, states.yaw);
 		}
 
-		adjustSetpointForEKFResets(vehicle_local_position, _setpoint);
+		_trajectory_setpoint_sub.update(&_setpoint);
+
+		if ((_setpoint.timestamp != 0) && (_setpoint.timestamp < vehicle_local_position.timestamp)) {
+			if (vehicle_local_position.vxy_reset_counter != _vxy_reset_counter) {
+				_setpoint.velocity[0] += vehicle_local_position.delta_vxy[0];
+				_setpoint.velocity[1] += vehicle_local_position.delta_vxy[1];
+			}
+
+			if (vehicle_local_position.vz_reset_counter != _vz_reset_counter) {
+				_setpoint.velocity[2] += vehicle_local_position.delta_vz;
+			}
+
+			if (vehicle_local_position.xy_reset_counter != _xy_reset_counter) {
+				_setpoint.position[0] += vehicle_local_position.delta_xy[0];
+				_setpoint.position[1] += vehicle_local_position.delta_xy[1];
+			}
+
+			if (vehicle_local_position.z_reset_counter != _z_reset_counter) {
+				_setpoint.position[2] += vehicle_local_position.delta_z;
+			}
+
+			if (vehicle_local_position.heading_reset_counter != _heading_reset_counter) {
+				_setpoint.yaw = wrap_pi(_setpoint.yaw + vehicle_local_position.delta_heading);
+			}
+		}
+
+		if (vehicle_local_position.vxy_reset_counter != _vxy_reset_counter) {
+			_vel_x_deriv.reset();
+			_vel_y_deriv.reset();
+		}
+
+		if (vehicle_local_position.vz_reset_counter != _vz_reset_counter) {
+			_vel_z_deriv.reset();
+		}
+
+		// save latest reset counters
+		_vxy_reset_counter = vehicle_local_position.vxy_reset_counter;
+		_vz_reset_counter = vehicle_local_position.vz_reset_counter;
+		_xy_reset_counter = vehicle_local_position.xy_reset_counter;
+		_z_reset_counter = vehicle_local_position.z_reset_counter;
+		_heading_reset_counter = vehicle_local_position.heading_reset_counter;
 
 		if (_vehicle_control_mode.flag_multicopter_position_control_enabled) {
 			// set failsafe setpoint if there hasn't been a new
@@ -415,6 +430,9 @@ void MulticopterPositionControl::Run()
 
 		if (_vehicle_control_mode.flag_multicopter_position_control_enabled
 		    && (_setpoint.timestamp >= _time_position_control_enabled)) {
+
+			// update vehicle constraints and handle smooth takeoff
+			_vehicle_constraints_sub.update(&_vehicle_constraints);
 
 			// fix to prevent the takeoff ramp to ramp to a too high value or get stuck because of NAN
 			// TODO: this should get obsolete once the takeoff limiting moves into the flight tasks
@@ -616,50 +634,6 @@ trajectory_setpoint_s MulticopterPositionControl::generateFailsafeSetpoint(const
 	}
 
 	return failsafe_setpoint;
-}
-
-void MulticopterPositionControl::adjustSetpointForEKFResets(const vehicle_local_position_s &vehicle_local_position,
-		trajectory_setpoint_s &setpoint)
-{
-	if ((setpoint.timestamp != 0) && (setpoint.timestamp < vehicle_local_position.timestamp)) {
-		if (vehicle_local_position.vxy_reset_counter != _vxy_reset_counter) {
-			setpoint.velocity[0] += vehicle_local_position.delta_vxy[0];
-			setpoint.velocity[1] += vehicle_local_position.delta_vxy[1];
-		}
-
-		if (vehicle_local_position.vz_reset_counter != _vz_reset_counter) {
-			setpoint.velocity[2] += vehicle_local_position.delta_vz;
-		}
-
-		if (vehicle_local_position.xy_reset_counter != _xy_reset_counter) {
-			setpoint.position[0] += vehicle_local_position.delta_xy[0];
-			setpoint.position[1] += vehicle_local_position.delta_xy[1];
-		}
-
-		if (vehicle_local_position.z_reset_counter != _z_reset_counter) {
-			setpoint.position[2] += vehicle_local_position.delta_z;
-		}
-
-		if (vehicle_local_position.heading_reset_counter != _heading_reset_counter) {
-			setpoint.yaw = wrap_pi(setpoint.yaw + vehicle_local_position.delta_heading);
-		}
-	}
-
-	if (vehicle_local_position.vxy_reset_counter != _vxy_reset_counter) {
-		_vel_x_deriv.reset();
-		_vel_y_deriv.reset();
-	}
-
-	if (vehicle_local_position.vz_reset_counter != _vz_reset_counter) {
-		_vel_z_deriv.reset();
-	}
-
-	// save latest reset counters
-	_vxy_reset_counter = vehicle_local_position.vxy_reset_counter;
-	_vz_reset_counter = vehicle_local_position.vz_reset_counter;
-	_xy_reset_counter = vehicle_local_position.xy_reset_counter;
-	_z_reset_counter = vehicle_local_position.z_reset_counter;
-	_heading_reset_counter = vehicle_local_position.heading_reset_counter;
 }
 
 int MulticopterPositionControl::task_spawn(int argc, char *argv[])
