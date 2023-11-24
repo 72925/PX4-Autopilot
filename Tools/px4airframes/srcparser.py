@@ -53,6 +53,8 @@ class AirframeGroup(object):
             return "HexaRotorX"
         elif (self.type == "Hexarotor +"):
             return "HexaRotorPlus"
+        elif (self.type == "UAHRQD"):
+            return "UAHRQD"
         elif (self.type == "Octorotor +"):
             return "OctoRotorPlus"
         elif (self.type == "Octorotor x"):

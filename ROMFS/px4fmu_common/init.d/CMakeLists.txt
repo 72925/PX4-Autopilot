@@ -43,6 +43,8 @@ px4_add_romfs_files(
 	rc.fw_apps
 	rc.fw_defaults
 	rc.heli_defaults
+	rc.hybrid_apps
+	rc.hybrid_defaults
 	rc.logging
 	rc.mc_apps
 	rc.mc_defaults
