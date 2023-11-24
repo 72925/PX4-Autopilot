@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-# Standard apps for Hybrid Hehicles .
+# Standard apps for Hybrid Vehicles .
 #
 # NOTE: Script variables are declared/initialized/unset in the rcS script.
 #
