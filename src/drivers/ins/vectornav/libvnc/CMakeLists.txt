@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 2.8.4)
+cmake_minimum_required(VERSION 2.4.8)
 project(libvnc C)
 
 include_directories(include)
